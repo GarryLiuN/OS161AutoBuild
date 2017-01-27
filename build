@@ -1,0 +1,219 @@
+#!/bin/bash
+
+if [ ${#} = 0 ]
+then
+	echo "CS 350 os161 build script"
+	echo "USAGE: ${0} <assignment suffix> [-OPTIONS]"
+	echo ""
+	echo "Default: only build kernel (equivlent to ${0} <assignment suffix> -bk"
+	echo ""
+	echo "Options:"
+	echo "  -b: build"
+	echo "  -c: clean"
+	echo "  -k: build/clean kernel"
+	echo "  -u: build/clean user programs"
+	echo "  -a: build/clean all"
+	exit 0
+fi
+
+PURPLE='\033[0;34m'
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+asst=ASST${1}
+shift
+root=$PWD
+uprog=${root}/os161-1.99
+conf=${root}/os161-1.99/kern/conf
+kern=${root}/os161-1.99/kern/compile/${asst}
+ostree=${root}/root
+kflag=0
+uflag=0
+cflag=0
+bflag=0
+
+while getopts "akucb" option
+do
+	case $option in
+		a) 
+			kflag=1 
+			uflag=1
+			;;
+		k) kflag=1 ;;
+		u) uflag=1 ;;
+		c) cflag=1 ;;
+		b) bflag=1 ;;
+	esac
+done
+
+
+
+########## Configuration #########
+# configure compiled os location
+cd ${uprog}
+output=$(./configure --ostree=${ostree} --toolprefix=cs350-)
+
+if [ ${?} != 0 ]
+then
+	echo ""
+	echo -e ${NC}$output
+	echo -e "${RED}ERROR: failed to configure os161"
+	exit 1
+else 
+	echo -e "${GREEN}OS configured!"
+fi
+
+# configure os to specific assignemt
+cd ${conf}
+output=$(./config ${asst})
+
+if [ ${?} != 0 ]
+then
+	echo ""
+	echo -e ${NC}$output
+	echo -e "${RED}ERROR: failed to configure to ${asst}"
+	exit 1
+else
+	echo -e "${GREEN}Kernel configured to ${asst}"
+fi
+
+##################
+######CLEAN#######
+if [ ${cflag} == 1 ]
+then
+	echo -e "${NC}Clean started..."
+	# Clean kernel build
+	if [ ${kflag} = 1 ]
+	then
+		cd ${kern}
+		echo -e "${NC}Kernel clean started..."
+		output=$(bmake clean)
+		if [ ${?} != 0 ]
+		then
+			echo ""
+			echo -e "${RED}ERROR: failed to clean kernel build"
+		else
+			echo -e "${GREEN}Kernel build cleaned!"
+		fi
+	fi
+	# Clean user programs build
+	if [ ${uflag} = 1 ]
+	then
+		cd ${uprog}
+		
+		echo -e "${NC}User programs clean started..."
+		output=$(bmake clean)
+		if [ ${?} != 0 ]
+		then
+			echo ""
+			echo -e "${RED}ERROR: failed to clean user programs build"
+		else
+			echo -e "${GREEN}User programs build cleaned!"
+		fi
+	fi
+
+	if [ ${kflag} == 0 ] && [ ${uflag} == 0 ]
+	then
+		echo -e "${PURPLE}All clean skipped. Please add options"
+	fi
+	echo -e "${PURPLE}Build clean completed!"
+	if [ ${bflag} == 0 ]
+	then
+		exit 0	
+	fi
+fi
+
+
+
+echo -e "${NC}Build started..."
+
+if [ ${kflag} == 1 ] || [ ${uflag} == 0 ]
+then
+	########### Kernel #############
+	echo -e "${NC}Kernel dependancy compilation started..."
+	cd ${kern}
+
+
+	# kernel dependancy compilation
+	output=$(bmake depend)
+	if [ ${?} != 0 ]
+	then
+		echo -e ${NC}$output
+		echo -e "${RED}ERROR: failed to compile dependancy"
+		exit 1
+	else
+		echo -e "${GREEN}Dependancy compiled!"
+	fi
+
+	# kernel compilation
+	echo -e "${NC}Kernel compilation started..."
+	output=$(bmake)
+	if [ ${?} != 0 ]
+	then
+		echo ""
+		echo -e ${NC}$output
+		echo -e "${RED}ERROR: failed to compile kernel"
+		exit 1
+	else
+		echo -e "${GREEN}Kernel compiled!"
+	fi
+
+	# kernel installation
+	echo -e "${NC}Installing kernel..."
+	output=$(bmake install)
+	if [ ${?} != 0 ]
+	then
+		echo ""
+		echo -e ${NC}$output
+		echo -e "${RED}ERROR: failed to install kernel"
+		exit 1
+	else
+		echo -e "${GREEN}Kernel installed!"
+	fi
+else
+	echo -e "${PURPLE}Skipped kernel build"
+fi
+
+
+if [ ${uflag} == 1 ]
+then
+	##### User Programs ########
+
+	cd ${uprog}
+	# user programs compilation
+	echo -e "${NC}User Programs compilation started...."
+	output=$(bmake)
+	if [ ${?} != 0 ]
+	then
+		echo ""
+		echo -e ${NC}$output
+		echo -e "${RED}ERROR: failed to compile user programs"
+		exit 1
+	else
+		echo -e "${GREEN}User programs compiled!"
+	fi
+
+	# user programs installation
+	echo -e "${NC}Installing user programs"
+	output=$(bmake install)
+	if [ ${?} != 0 ]
+	then
+		echo ""
+		echo -e ${NC}$output
+		echo -e "${RED}ERROR: failed to install user programs"
+		exit 1
+	else
+		echo -e "${GREEN}User programs installed!"
+	fi
+else
+	echo -e "${PURPLE}Skipped user programs build"
+fi
+
+
+# copy confg to os location
+cd $ostree
+cp /u/cs350/sys161/sys161.conf sys161.conf 
+
+echo -e "${PURPLE}Build completed!"
+exit 0
