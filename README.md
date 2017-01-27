@@ -10,6 +10,7 @@ USAGE: ./build <assignment suffix> [-OPTIONS]
 Default: only build kernel (equivlent to ./build <assignment suffix> -bk
 
 Options:
+
   -b: build
   
   -c: clean
